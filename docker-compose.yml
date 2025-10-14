@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # 1. データベース (MySQL 8) サービス
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      # 🚨 開発用設定です。必要に応じて変更してください
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: my_database
+      MYSQL_USER: my_user
+      MYSQL_PASSWORD: user_password
+    volumes:
+      - db_data:/var/lib/mysql
+      - .:/app 
+      # 【追加】ローカルの000-default.confをコンテナ内にマウント
+      - ./000-default.conf:/etc/apache2/sites-enabled/000-default.conf 
+      
+    ports:
+      - "3306:3306"
+
+  # 2. PHP 8.2 + Apache Webサーバー サービス
+  app:
+    image: webdevops/php-apache:8.2
+    container_name: php_app
+    restart: always
+    volumes:
+      - .:/app 
+    environment:
+      # Webサーバーのドキュメントルートを CakePHP の webroot に設定
+      WEB_DOCUMENT_ROOT: /app/webroot 
+      # データベース接続文字列
+      DATABASE_URL: mysql://cakephp_user:user_password@db/cakephp_db
+      CAKEPHP_DEBUG: 1
+
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+
+volumes:
+  db_data:
