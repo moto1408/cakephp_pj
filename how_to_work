@@ -1,0 +1,5 @@
+
+# 開発ディレクトリに移動（PC開発環境）
+cd C:\work\cakephp-app
+# docker 起動コマンド
+docker compose up -d
