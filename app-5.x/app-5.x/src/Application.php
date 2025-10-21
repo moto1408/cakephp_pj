@@ -52,6 +52,8 @@ class Application extends BaseApplication
             // The bake plugin requires fallback table classes to work properly
             FactoryLocator::add('Table', (new TableLocator())->allowFallbackClass(false));
         }
+        // 最もシンプルな記述に戻す（Composerがvendorから正しくロードします）
+        $this->addPlugin('Authentication');
     }
 
     /**

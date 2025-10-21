@@ -27,6 +27,12 @@ use Cake\Http\MiddlewareQueue;
 use Cake\ORM\Locator\TableLocator;
 use Cake\Routing\Middleware\AssetMiddleware;
 use Cake\Routing\Middleware\RoutingMiddleware;
+use Authentication\AuthenticationService; // ★★★ 追加 ★★★
+use Authentication\AuthenticationServiceInterface; // ★★★ 追加 ★★★
+use Authentication\AuthenticationServiceProviderInterface; // ★★★ 追加 ★★★
+use Psr\Http\Message\ServerRequestInterface; // ★★★ 追加 ★★★
+// 認証ミドルウェアのクラスをインポート
+use Authentication\Middleware\AuthenticationMiddleware;
 
 /**
  * Application setup class.
@@ -36,7 +42,7 @@ use Cake\Routing\Middleware\RoutingMiddleware;
  *
  * @extends \Cake\Http\BaseApplication<\App\Application>
  */
-class Application extends BaseApplication
+class Application extends BaseApplication implements AuthenticationServiceProviderInterface
 {
     /**
      * Load all the application configuration and bootstrap logic.
@@ -52,6 +58,9 @@ class Application extends BaseApplication
             // The bake plugin requires fallback table classes to work properly
             FactoryLocator::add('Table', (new TableLocator())->allowFallbackClass(false));
         }
+        // $this->addPlugin('Authentication');
+        // $this->addPlugin('Authentication', ['path' => ROOT . '/plugins/Authentication/']);
+        // $this->addPlugin('Authentication', ['autoload' => true, 'path' => ROOT . '/plugins/Authentication/']);
     }
 
     /**
@@ -78,6 +87,9 @@ class Application extends BaseApplication
             // See https://github.com/CakeDC/cakephp-cached-routing
             ->add(new RoutingMiddleware($this))
 
+            // RoutingMiddlewareの後ろ、CsrfProtectionMiddlewareの前が一般的です。
+            ->add(new AuthenticationMiddleware($this))
+
             // Parse various types of encoded request bodies so that they are
             // available as array through $request->getData()
             // https://book.cakephp.org/5/en/controllers/middleware.html#body-parser-middleware
@@ -101,5 +113,45 @@ class Application extends BaseApplication
      */
     public function services(ContainerInterface $container): void
     {
+    }
+    // src/Application.php の末尾付近
+
+    /**
+     * Returns a service provider instance.
+     *
+     * @param \Psr\Http\Message\ServerRequestInterface $request Request
+     * @return \Authentication\AuthenticationServiceInterface
+     */
+    public function getAuthenticationService(ServerRequestInterface $request): AuthenticationServiceInterface
+    {
+        $authenticationService = new AuthenticationService([
+            // 認証されていないユーザーのリダイレクト先
+            'unauthenticatedRedirect' => $request->getUri()->getPath() === '/login'
+                ? null // ログインページならリダイレクトしない
+                : '/login', // それ以外は /login へ
+            'loginUrl' => '/login',
+        ]);
+
+        // 【Identifier (ユーザー特定) の設定】
+        // ログインフォームから渡されたメールアドレスとパスワードでユーザーを特定する設定
+        $authenticationService->loadIdentifier('Authentication.Password', [
+            'fields' => [
+                'username' => 'email', // フォームの 'email' フィールドを使用
+                'password' => 'password',
+            ],
+            'resolver' => [
+                'className' => 'Authentication.Orm',
+                'userModel' => 'Users', // Usersテーブルでユーザーを検索
+            ],
+        ]);
+
+        // 【Authenticator (認証方法) の設定】
+        // セッションとフォームを使った認証方法をロード
+        $authenticationService->loadAuthenticator('Authentication.Session');
+        $authenticationService->loadAuthenticator('Authentication.Form', [
+            'loginUrl' => '/login',
+        ]);
+
+        return $authenticationService;
     }
 }
